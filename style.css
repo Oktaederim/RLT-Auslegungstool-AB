@@ -168,11 +168,17 @@ input[type="number"]:focus {
     text-align: center;
     min-height: 20px;
     visibility: hidden;
+    line-height: 1.4; /* KORREKTUR: Verbessert Lesbarkeit bei zwei Zeilen */
 }
 
 .info-box.visible {
     visibility: visible;
 }
+
+.info-box small {
+    color: #6c757d; /* KORREKTUR: Macht den Vergleichshinweis etwas dezenter */
+}
+
 
 .info-box.warning {
     background-color: #FFF3CD;
