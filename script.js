@@ -37,18 +37,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const heatingLoadWatts = (parseFloat(inputs.heatingLoad.value) || 0) * 1000;
             const coolingLoadWatts = (parseFloat(inputs.coolingLoad.value) || 0) * 1000;
 
-            const hygienicFlow = roomVolume * 2;
-            outputs.recommendedVolumeFlow.textContent = `${hygienicFlow.toFixed(0)} m³/h`;
+            // KORREKTUR: Empfohlener Luftwechsel auf 8-fach für Labore geändert
+            const recommendedLabFlow = roomVolume * 8;
+            outputs.recommendedVolumeFlow.textContent = `${recommendedLabFlow.toFixed(0)} m³/h`;
 
             const maxLoad = Math.max(heatingLoadWatts, coolingLoadWatts, 1);
             const loadBasedFlow = maxLoad / (airProperties.cp * 8);
-            const calculatedMin = Math.floor(hygienicFlow / 2 / 10) * 10;
-            const calculatedMax = Math.ceil(Math.max(hygienicFlow, loadBasedFlow, roomVolume * 8) * 1.5 / 100) * 100;
+            
+            // Min-Wert orientiert sich nun am 2-fachen Luftwechsel
+            const calculatedMin = Math.floor((roomVolume * 2) / 10) * 10;
+            const calculatedMax = Math.ceil(Math.max(recommendedLabFlow, loadBasedFlow) * 1.5 / 100) * 100;
             
             inputs.volumeFlowMin.value = Math.max(0, calculatedMin);
             inputs.volumeFlowMax.value = Math.max(500, calculatedMax);
             
-            inputs.volumeFlowSlider.value = hygienicFlow.toFixed(0);
+            // Setze Regler auf den empfohlenen Labor-Wert
+            inputs.volumeFlowSlider.value = recommendedLabFlow.toFixed(0);
         }
         
         updateSliderFromMinMaxInputs();
@@ -58,10 +62,9 @@ document.addEventListener('DOMContentLoaded', () => {
         let min = parseFloat(inputs.volumeFlowMin.value) || 0;
         let max = parseFloat(inputs.volumeFlowMax.value) || 1000;
 
-        // KORREKTUR: Verhindert, dass der Regler blockiert
         if (min >= max) {
-            min = Math.floor(max * 0.8 / 10) * 10; // min wird auf 80% von max gesetzt
-            inputs.volumeFlowMin.value = min; // Korrigierten Wert im Feld anzeigen
+            min = Math.floor(max * 0.8 / 10) * 10;
+            inputs.volumeFlowMin.value = min;
         }
 
         inputs.volumeFlowSlider.min = min;
@@ -89,7 +92,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (roomVolume > 0) {
             const airChangeRate = volumeFlow / roomVolume;
-            outputs.flowRateInfo.textContent = `Das entspricht einer Luftwechselrate von ${airChangeRate.toFixed(1)} 1/h.`;
+            const hygienicFlowOffice = roomVolume * 2; // Referenzwert für Büros
+            
+            // KORREKTUR: Zusätzlicher Hinweis wird generiert
+            outputs.flowRateInfo.innerHTML = `Das entspricht einer Luftwechselrate von <strong>${airChangeRate.toFixed(1)} 1/h</strong>.
+                                              <br><small>(Zum Vergleich: Hygienischer Luftwechsel für Büros ca. 2 1/h, entspr. ${hygienicFlowOffice.toFixed(0)} m³/h)</small>`;
             outputs.flowRateInfo.className = 'info-box visible';
         } else {
             outputs.flowRateInfo.className = 'info-box';
