@@ -28,7 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // ----- HAUPTFUNKTIONEN -----
 
-    // Berechnet alles neu, wenn sich die Haupt-Raumdaten ändern
     function runInitialCalculations() {
         const roomArea = parseFloat(inputs.roomArea.value) || 0;
         const roomHeight = parseFloat(inputs.roomHeight.value) || 0;
@@ -38,11 +37,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const heatingLoadWatts = (parseFloat(inputs.heatingLoad.value) || 0) * 1000;
             const coolingLoadWatts = (parseFloat(inputs.coolingLoad.value) || 0) * 1000;
 
-            // 1. Hygienischen Luftwechsel berechnen und anzeigen
             const hygienicFlow = roomVolume * 2;
             outputs.recommendedVolumeFlow.textContent = `${hygienicFlow.toFixed(0)} m³/h`;
 
-            // 2. Sinnvollen Bereich für den Slider vorschlagen und einstellen
             const maxLoad = Math.max(heatingLoadWatts, coolingLoadWatts, 1);
             const loadBasedFlow = maxLoad / (airProperties.cp * 8);
             const calculatedMin = Math.floor(hygienicFlow / 2 / 10) * 10;
@@ -51,36 +48,31 @@ document.addEventListener('DOMContentLoaded', () => {
             inputs.volumeFlowMin.value = Math.max(0, calculatedMin);
             inputs.volumeFlowMax.value = Math.max(500, calculatedMax);
             
-            // 3. Den Slider und seine Anzeigen aktualisieren
-            updateSliderFromMinMaxInputs();
-            inputs.volumeFlowSlider.value = hygienicFlow.toFixed(0); // Setze Regler auf den hygienischen Wert
+            inputs.volumeFlowSlider.value = hygienicFlow.toFixed(0);
         }
         
-        // 4. Alle Anzeigen aktualisieren
-        updateAllDisplays();
+        updateSliderFromMinMaxInputs();
     }
     
-    // Passt den Slider an die Werte in den Min/Max-Feldern an
     function updateSliderFromMinMaxInputs() {
-        const min = parseFloat(inputs.volumeFlowMin.value) || 0;
-        const max = parseFloat(inputs.volumeFlowMax.value) || 1000;
+        let min = parseFloat(inputs.volumeFlowMin.value) || 0;
+        let max = parseFloat(inputs.volumeFlowMax.value) || 1000;
 
-        if (min > max) { // Verhindert, dass Min größer als Max ist
-            inputs.volumeFlowMin.value = max;
-            return;
+        // KORREKTUR: Verhindert, dass der Regler blockiert
+        if (min >= max) {
+            min = Math.floor(max * 0.8 / 10) * 10; // min wird auf 80% von max gesetzt
+            inputs.volumeFlowMin.value = min; // Korrigierten Wert im Feld anzeigen
         }
 
         inputs.volumeFlowSlider.min = min;
         inputs.volumeFlowSlider.max = max;
 
-        // Sicherstellen, dass der aktuelle Wert innerhalb der neuen Grenzen liegt
         if (parseFloat(inputs.volumeFlowSlider.value) < min) inputs.volumeFlowSlider.value = min;
         if (parseFloat(inputs.volumeFlowSlider.value) > max) inputs.volumeFlowSlider.value = max;
 
-        updateAllDisplays(); // Aktualisiere alle Anzeigen nach der Bereichsänderung
+        updateAllDisplays();
     }
 
-    // Aktualisiert alle Anzeigen basierend auf dem aktuellen Slider-Wert
     function updateAllDisplays() {
         const volumeFlow = parseFloat(inputs.volumeFlowSlider.value);
         outputs.volumeFlowValue.textContent = volumeFlow.toFixed(0);
@@ -147,20 +139,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ----- EVENT LISTENERS -----
-
-    // 1. Wenn sich Haupt-Raumdaten ändern -> Alles neu berechnen und Slider-Bereich vorschlagen
+    
     [inputs.roomArea, inputs.roomHeight, inputs.heatingLoad, inputs.coolingLoad, inputs.roomTemp].forEach(input => {
         input.addEventListener('input', runInitialCalculations);
     });
     
-    // 2. Wenn sich die Min/Max-Felder ändern -> Nur den Slider-Bereich anpassen
     [inputs.volumeFlowMin, inputs.volumeFlowMax].forEach(input => {
         input.addEventListener('input', updateSliderFromMinMaxInputs);
     });
 
-    // 3. Wenn der Slider bewegt wird -> Nur die Anzeigen aktualisieren
     inputs.volumeFlowSlider.addEventListener('input', updateAllDisplays);
 
-    // Starte die Berechnungen einmal beim Laden der Seite
     runInitialCalculations();
 });
