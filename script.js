@@ -25,73 +25,72 @@ document.addEventListener('DOMContentLoaded', () => {
     const airProperties = {
         cp: 0.34 // Vereinfachter Faktor [Wh/(m³*K)]
     };
+    
+    // ----- HAUPTFUNKTIONEN -----
 
-    let state = {
-        isInitialCalculation: true
-    };
-
-    // Hauptfunktion, die alle Berechnungen auslöst
-    function runCalculations() {
-        // 1. Hole alle aktuellen Werte
+    // Berechnet alles neu, wenn sich die Haupt-Raumdaten ändern
+    function runInitialCalculations() {
         const roomArea = parseFloat(inputs.roomArea.value) || 0;
         const roomHeight = parseFloat(inputs.roomHeight.value) || 0;
-        const heatingLoadKW = parseFloat(inputs.heatingLoad.value) || 0;
-        const coolingLoadKW = parseFloat(inputs.coolingLoad.value) || 0;
-        const totalHeatingLoadWatts = heatingLoadKW * 1000;
-        const totalCoolingLoadWatts = coolingLoadKW * 1000;
         
-        // 2. Aktualisiere den Bereich des Schiebereglers
         if (roomArea > 0 && roomHeight > 0) {
-            updateSliderRangeAndValue(roomArea, roomHeight, totalHeatingLoadWatts, totalCoolingLoadWatts);
-        }
+            const roomVolume = roomArea * roomHeight;
+            const heatingLoadWatts = (parseFloat(inputs.heatingLoad.value) || 0) * 1000;
+            const coolingLoadWatts = (parseFloat(inputs.coolingLoad.value) || 0) * 1000;
 
-        // 3. Aktualisiere alle Anzeigen
-        updateVolumeFlowDisplay();
-        calculateAndDisplayTemps();
+            // 1. Hygienischen Luftwechsel berechnen und anzeigen
+            const hygienicFlow = roomVolume * 2;
+            outputs.recommendedVolumeFlow.textContent = `${hygienicFlow.toFixed(0)} m³/h`;
 
-        // Nach der ersten Berechnung wird dieser Flag auf false gesetzt
-        state.isInitialCalculation = false;
-    }
-
-    // Aktualisiert die Min/Max-Werte und den Schieberegler selbst
-    function updateSliderRangeAndValue(roomArea, roomHeight, heatingLoad, coolingLoad) {
-        const roomVolume = roomArea * roomHeight;
-        const hygienicFlow = roomVolume * 2; // Hygienischer Luftwechsel (2-fach)
-        outputs.recommendedVolumeFlow.textContent = `${hygienicFlow.toFixed(0)} m³/h`;
-
-        // Schätze einen Volumenstrom, der für die Lasten benötigt wird (bei 8K Spreizung)
-        const maxLoad = Math.max(heatingLoad, coolingLoad, 1);
-        const loadBasedFlow = maxLoad / (airProperties.cp * 8);
-
-        // Bei der allerersten Berechnung werden die Min/Max-Felder vorbelegt
-        if (state.isInitialCalculation) {
+            // 2. Sinnvollen Bereich für den Slider vorschlagen und einstellen
+            const maxLoad = Math.max(heatingLoadWatts, coolingLoadWatts, 1);
+            const loadBasedFlow = maxLoad / (airProperties.cp * 8);
             const calculatedMin = Math.floor(hygienicFlow / 2 / 10) * 10;
-            // Max-Wert berücksichtigt Hygiene, Last und eine hohe Labor-Luftwechselrate (8-fach)
             const calculatedMax = Math.ceil(Math.max(hygienicFlow, loadBasedFlow, roomVolume * 8) * 1.5 / 100) * 100;
             
             inputs.volumeFlowMin.value = Math.max(0, calculatedMin);
-            inputs.volumeFlowMax.value = Math.max(500, calculatedMax); // Mindestens 500 als Max-Wert
+            inputs.volumeFlowMax.value = Math.max(500, calculatedMax);
             
-            // Setze den Schieberegler auf einen sinnvollen Startwert
-            inputs.volumeFlowSlider.value = hygienicFlow.toFixed(0);
+            // 3. Den Slider und seine Anzeigen aktualisieren
+            updateSliderFromMinMaxInputs();
+            inputs.volumeFlowSlider.value = hygienicFlow.toFixed(0); // Setze Regler auf den hygienischen Wert
         }
-
-        // Lese die Werte aus den Min/Max-Feldern und weise sie dem Schieberegler zu
+        
+        // 4. Alle Anzeigen aktualisieren
+        updateAllDisplays();
+    }
+    
+    // Passt den Slider an die Werte in den Min/Max-Feldern an
+    function updateSliderFromMinMaxInputs() {
         const min = parseFloat(inputs.volumeFlowMin.value) || 0;
         const max = parseFloat(inputs.volumeFlowMax.value) || 1000;
+
+        if (min > max) { // Verhindert, dass Min größer als Max ist
+            inputs.volumeFlowMin.value = max;
+            return;
+        }
+
         inputs.volumeFlowSlider.min = min;
         inputs.volumeFlowSlider.max = max;
 
-        // Stelle sicher, dass der aktuelle Wert des Reglers innerhalb der neuen Grenzen liegt
+        // Sicherstellen, dass der aktuelle Wert innerhalb der neuen Grenzen liegt
         if (parseFloat(inputs.volumeFlowSlider.value) < min) inputs.volumeFlowSlider.value = min;
         if (parseFloat(inputs.volumeFlowSlider.value) > max) inputs.volumeFlowSlider.value = max;
+
+        updateAllDisplays(); // Aktualisiere alle Anzeigen nach der Bereichsänderung
     }
-    
-    // Aktualisiert die Textanzeige für den Volumenstrom und die Luftwechselrate
-    function updateVolumeFlowDisplay() {
+
+    // Aktualisiert alle Anzeigen basierend auf dem aktuellen Slider-Wert
+    function updateAllDisplays() {
         const volumeFlow = parseFloat(inputs.volumeFlowSlider.value);
         outputs.volumeFlowValue.textContent = volumeFlow.toFixed(0);
+        updateAirChangeRateDisplay(volumeFlow);
+        calculateAndDisplayTemps(volumeFlow);
+    }
+    
+    // ----- HILFSFUNKTIONEN -----
 
+    function updateAirChangeRateDisplay(volumeFlow) {
         const roomArea = parseFloat(inputs.roomArea.value) || 0;
         const roomHeight = parseFloat(inputs.roomHeight.value) || 0;
         const roomVolume = roomArea * roomHeight;
@@ -104,10 +103,8 @@ document.addEventListener('DOMContentLoaded', () => {
             outputs.flowRateInfo.className = 'info-box';
         }
     }
-    
-    // Berechnet und zeigt die Zulufttemperaturen an
-    function calculateAndDisplayTemps() {
-        const volumeFlow = parseFloat(inputs.volumeFlowSlider.value);
+
+    function calculateAndDisplayTemps(volumeFlow) {
         const roomTemp = parseFloat(inputs.roomTemp.value) || 21;
         const heatingLoadWatts = (parseFloat(inputs.heatingLoad.value) || 0) * 1000;
         const coolingLoadWatts = (parseFloat(inputs.coolingLoad.value) || 0) * 1000;
@@ -120,24 +117,20 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // --- HEIZEN ---
         if (heatingLoadWatts > 0) {
-            const deltaT_heating = heatingLoadWatts / (volumeFlow * airProperties.cp);
-            const tempHeating = roomTemp + deltaT_heating;
-            outputs.supplyTempHeating.textContent = `${tempHeating.toFixed(1)} °C`;
-            if (deltaT_heating > 20) showHint(outputs.heatingHint, 'KRITISCH: Sehr hohe Übertemperatur!', 'critical');
-            else if (deltaT_heating > 15) showHint(outputs.heatingHint, 'HINWEIS: Hohe Übertemperatur.', 'warning');
+            const deltaT = heatingLoadWatts / (volumeFlow * airProperties.cp);
+            outputs.supplyTempHeating.textContent = `${(roomTemp + deltaT).toFixed(1)} °C`;
+            if (deltaT > 20) showHint(outputs.heatingHint, 'KRITISCH: Sehr hohe Übertemperatur!', 'critical');
+            else if (deltaT > 15) showHint(outputs.heatingHint, 'HINWEIS: Hohe Übertemperatur.', 'warning');
         } else {
             outputs.supplyTempHeating.textContent = '-- °C';
         }
 
-        // --- KÜHLEN ---
         if (coolingLoadWatts > 0) {
-            const deltaT_cooling = coolingLoadWatts / (volumeFlow * airProperties.cp);
-            const tempCooling = roomTemp - deltaT_cooling;
-            outputs.supplyTempCooling.textContent = `${tempCooling.toFixed(1)} °C`;
-            if (deltaT_cooling > 10) showHint(outputs.coolingHint, 'KRITISCH: Sehr hohe Spreizung! Zugluftgefahr!', 'critical');
-            else if (deltaT_cooling > 8) showHint(outputs.coolingHint, 'HINWEIS: Spreizung > 8K, Zugluft beachten.', 'warning');
+            const deltaT = coolingLoadWatts / (volumeFlow * airProperties.cp);
+            outputs.supplyTempCooling.textContent = `${(roomTemp - deltaT).toFixed(1)} °C`;
+            if (deltaT > 10) showHint(outputs.coolingHint, 'KRITISCH: Sehr hohe Spreizung! Zugluftgefahr!', 'critical');
+            else if (deltaT > 8) showHint(outputs.coolingHint, 'HINWEIS: Spreizung > 8K, Zugluft beachten.', 'warning');
         } else {
             outputs.supplyTempCooling.textContent = '-- °C';
         }
@@ -153,30 +146,21 @@ document.addEventListener('DOMContentLoaded', () => {
         outputs.coolingHint.className = 'info-box';
     }
 
-    // --- EVENT LISTENERS ---
-    
-    // Wenn sich einer der Haupt-Inputs ändert, wird alles neu berechnet und die Min/Max-Felder werden zurückgesetzt
+    // ----- EVENT LISTENERS -----
+
+    // 1. Wenn sich Haupt-Raumdaten ändern -> Alles neu berechnen und Slider-Bereich vorschlagen
     [inputs.roomArea, inputs.roomHeight, inputs.heatingLoad, inputs.coolingLoad, inputs.roomTemp].forEach(input => {
-        input.addEventListener('input', () => {
-            state.isInitialCalculation = true;
-            runCalculations();
-        });
+        input.addEventListener('input', runInitialCalculations);
     });
     
-    // Wenn der User die Min/Max-Felder ändert, wird der Regler angepasst, aber die Felder nicht überschrieben
+    // 2. Wenn sich die Min/Max-Felder ändern -> Nur den Slider-Bereich anpassen
     [inputs.volumeFlowMin, inputs.volumeFlowMax].forEach(input => {
-        input.addEventListener('input', () => {
-            state.isInitialCalculation = false;
-            runCalculations();
-        });
+        input.addEventListener('input', updateSliderFromMinMaxInputs);
     });
 
-    // Wenn der Schieberegler bewegt wird, werden nur die Anzeigen aktualisiert
-    inputs.volumeFlowSlider.addEventListener('input', () => {
-        updateVolumeFlowDisplay();
-        calculateAndDisplayTemps();
-    });
+    // 3. Wenn der Slider bewegt wird -> Nur die Anzeigen aktualisieren
+    inputs.volumeFlowSlider.addEventListener('input', updateAllDisplays);
 
-    // Starte die Berechnungen beim Laden der Seite
-    runCalculations();
+    // Starte die Berechnungen einmal beim Laden der Seite
+    runInitialCalculations();
 });
